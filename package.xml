@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>rl_pursuit</name>
+  <name>bwi_rl</name>
   <version>0.0.1</version>
   <description>Samuel Barrett's RL code</description>
 
