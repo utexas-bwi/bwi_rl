@@ -57,6 +57,7 @@ class StateActionInfo {
 
 class StateInfo {
   public:
+    StateInfo() {}
     StateInfo(unsigned int numActions, unsigned int initialVisits) : 
         stateVisits(initialVisits) {
       actionInfos.resize(numActions);
@@ -93,6 +94,7 @@ class MultiThreadedMCTS {
     _(float,lambda,lambda,0.0) \
     _(float,gamma,gamma,1.0) \
     _(float,rewardBound,rewardBound,10000) \
+    _(float,maxNewNodesPerRollout,maxNewNodesPerRollout,5) \
     _(float,unknownActionValue,unknownActionValue,-1e10) \
     _(float,unknownActionPlanningValue,unknownActionPlanningValue,1e10) \
     _(float,unknownBootstrapValue,unknownBootstrapValue,0.0) \
@@ -119,9 +121,10 @@ class MultiThreadedMCTS {
         const StateInfo &state, bool usePlanningBounds);
     float maxValueForState(const State &state, const StateInfo& stateInfo);
     Action selectAction(const State &state, bool usePlanningBounds, 
-        int& action_idx, int& numActions);
+        unsigned int& action_idx, unsigned int& numActions);
 
   private:
+    ModelPtr model;
     ModelUpdaterPtr modelUpdater;
     StateMappingPtr stateMapping;
     bool valid;
@@ -207,6 +210,7 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
     MCTS_OUTPUT("------------START ROLLOUT--------------");
     MCTS_TIC(SELECT_MODEL);
     ModelPtr model = modelUpdater->selectModel(startState);
+    this->model = model;
     MCTS_TOC(SELECT_MODEL);
     State state(startState);
     State newState;
@@ -335,9 +339,7 @@ float MultiThreadedMCTS<State, StateHash, Action>::calcActionValue(
     }
   }
   if (usePlanningBounds) {
-    unsigned int &na = actionInfo->visits;
-    unsigned int &n = stateInfo.stateVisits;
-    return actionInfo->val + p.rewardBound * sqrt(log(n) / na);
+    return actionInfo->val + p.rewardBound * sqrt(log(stateInfo.stateVisits) / actionInfo->visits);
   } else {
     return actionInfo->val;
   }
@@ -353,7 +355,7 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectWorldAction(const Stat
 
 template<class State, class StateHash, class Action>
 Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &state, 
-    bool usePlanningBounds, int& action_idx, int& num_actions) {
+    bool usePlanningBounds, unsigned int& action_idx, unsigned int& num_actions) {
 
   std::vector<Action> stateActions;
   this->model->getAllActions(state, stateActions);
@@ -407,7 +409,7 @@ float MultiThreadedMCTS<State, StateHash, Action>::maxValueForState(const State 
 
 template<class State, class StateHash, class Action>
 void MultiThreadedMCTS<State, StateHash, Action>::restart() {
-  stateInfoTable->clear();
+  stateInfoTable.clear();
 }
 
 template<class State, class StateHash, class Action>
