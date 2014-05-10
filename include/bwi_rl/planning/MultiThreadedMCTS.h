@@ -38,19 +38,13 @@ ENUM(MCTS_Timer,
 #define MCTS_RESET_TIMINGS() (void)(0);
 #endif
 
-class HistoryStep {
-  public:
-    HistoryStep(const State &state, const Action &action, float reward):
-      state(state), action(action), reward(reward) {}
-}
-
 class StateActionInfo {
   public:
     StateActionInfo(unsigned int visits, float val):
       visits(visits),
       val(val) {}
-    volatile unsigned int visits;
-    volatile float val;
+    unsigned int visits;
+    float val;
 };
 
 class StateInfo {
@@ -67,6 +61,16 @@ class StateInfo {
 template<class State, class Action>
 class MultiThreadedMCTS {
   public:
+
+    class HistoryStep {
+      public:
+        HistoryStep(const State &state, int &action_idx, float reward):
+          state(state), action_idx(action_idx), reward(reward) {}
+        State state;
+        unsigned int action_idx;
+        float reward;
+    }
+
     typedef boost::shared_ptr<MultiThreadedMCTS<State,Action> > Ptr;
     /* typedef typename MultiThreadedMCTSEstimator<State,Action>::Ptr ValuePtr; */
     typedef typename ModelUpdater<State,Action>::Ptr ModelUpdaterPtr;
@@ -177,6 +181,7 @@ void MultiThreadedMCTS<State, Action>::singleThreadedSearch() {
     State state(startState);
     State newState;
     Action action;
+    int action_idx;
     float reward;
     bool terminal = false;
     int depth_count;
@@ -191,7 +196,7 @@ void MultiThreadedMCTS<State, Action>::singleThreadedSearch() {
       if (terminal || ((maxPlanningTime > 0) && (getTime() > endPlanningTime)))
         break;
       MCTS_TIC(SELECT_PLANNING_ACTION);
-      action = selectAction(state, true);
+      action = selectAction(state, true, action_idx);
       MCTS_OUTPUT("ACTION: " << action);
       MCTS_TOC(SELECT_PLANNING_ACTION);
       MCTS_TIC(TAKE_ACTION);
@@ -200,20 +205,87 @@ void MultiThreadedMCTS<State, Action>::singleThreadedSearch() {
       modelUpdater->updateSimulationAction(action, newState);
       MCTS_TIC(VISIT);
       stateCount[state] += 1; // Should construct with 0 if unavailable
-      history.push_back(HistoryStep(state, action, reward);
+      history.push_back(HistoryStep(state, action_idx, reward);
       MCTS_TOC(VISIT);
       state = newState;
       stateMapping->map(state); // discretize state
     }
 
     MCTS_OUTPUT("------------ BACKPROP --------------");
+    float value = 0;
+    if (!terminal) {
+      // Get bootstrap value of final state
+      StateInfoTable::const_accessor a;
+      if (!stateInfo.find(a, state)) { // The state does not exist, choose an action randomly and act
+        value = p.unknownBootstrapValue;
+      } else {
+        StateInfo stateInfo = a->second; // Create copy and release lock.
+        a.release();
+        value = maxValueForState(state, stateInfo);
+      }
+    }
+
+    typdef std::pair<State, StateInfo> StateToInfoPair
+    std::vector<StateToInfoPair> statesToAdd;
+
     for (int step = history.size() - 1; step >= 0; --step) {
+
+      State &state = history[step].state;
+      unsigned int &action_idx = history[step].action_idx;
+      unsigned int &num_actions = history[step].num_actions;
+      float &reward = history[step].reward;
+
+      value = reward + p.gamma * value;
       
+      // Get information about this state
+      StateInfoTable::const_accessor a;
+      StateInfo stateInfo(num_actions, 0); 
+      bool is_new_state = true;
+      if (stateInfo.find(a, state)) { // The state does not exist, choose an action randomly and act
+        stateInfo = a->second; // Create copy and release lock.
+        a.release();
+        is_new_state = false;
+      }
+
+      if (p.theoreticallyCorrectLambda) {
+        if (stateInfo.stateVisits != 0) {
+          value = p.lambda * value + (1.0 - p.lambda) * maxValueForState(state, stateInfo);
+        } // else don't change the value being backed up
+      }
+
+      // Modify the action appropriately
+      stateCount[state]--;
+      if (stateCount[state] == 0) { // First Visit Monte Carlo
+        stateInfo.stateVisits++;
+        if (!stateInfo.actionInfos[action_idx]) {
+          stateInfo.actionsInfos[action_idx].reset(new StateActionInfo(0, 0));
+        }
+        stateInfo.actionInfos[actionIdx]->visits++;
+        stateActionInfo->val += (1.0 / stateInfo.actionInfos[actionIdx]->++visits) * 
+          stateInfo.actionInfos[actionIdx] * (newQ - stateActionInfo->val);
+
+        stateActionInfo->visits++;
+        float learnRate = 1.0 / (stateActionInfo->visits);
+        stateActionInfo->val += learnRate * (newQ - stateActionInfo->val);
+        if (is_new_state) {
+          statesToAdd.push_back(std::make_pair(state, stateInfo));
+        }
+      }
+      
+      if (!p.theoreticallyCorrectLambda) {
+        if (stateInfo.stateVisits != 0) {
+          value = p.lambda * value + (1.0 - p.lambda) * maxValueForState(state, stateInfo);
+        } // else don't change the value being backed up
+      }
 
     }
-    // TODO compute value backups, updating elements and decide which nodes to add
-    // TODO add those nodes to the concurrent hash map
-    // TODO ADD parameter to select how many nodes to add
+
+    // Finally add the states
+    for (int s = statesToAdd.size() - 1; 
+         s >= 0 && s >= statesToAdd.size() - p.maxNewNodesPerRollout;
+         --s) {
+      stateInfoTable.insert(statesToAdd[s]);
+    }
   }
 }
 
@@ -232,6 +304,7 @@ float MultiThreadedMCTS<State, Action>::calcActionValue(
     unsigned int na = stateActionInfo->visits;
     unsigned int n = stateInfo.stateVisits;
     if (na == 0) {
+      // TODO I don't think this can happen.
       // Shouldn't be here, but probably an artifact of thread overwriting
       return p.unknownActionPlanningValue;
     } else {
@@ -246,21 +319,23 @@ template<class State, class Action>
 Action MultiThreadedMCTS<State, Action>::selectWorldAction(const State &state) {
   State mappedState(state);
   stateMapping->map(mappedState); // discretize state
-  return selectAction(mappedState, false);
+  int unused_action_idx;
+  return selectAction(mappedState, false, unused_action_idx);
 }
 
 template<class State, class Action>
-Action MCTS<State,Action>::selectAction(const State &state, bool usePlanningBounds) {
+Action MCTS<State,Action>::selectAction(const State &state, bool usePlanningBounds, int& actionIdx) {
 
   std::vector<Action> stateActions;
   this->model->getAllActions(stateActions);
 
   StateInfoTable::const_accessor a;
   if (!stateInfo.find(a, state)) { // The state does not exist, choose an action randomly and act
-    return stateActions[rng->randomInt(stateActions.size())];
+    actionIdx = rng->randomInt(stateActions.size()); 
+    return stateActions[actionIdx];
   }
   StateInfo stateInfo = a->second; // Create copy and release lock.
-  a.release();
+  a.release(); // TODO move this to end (i.e. remove it) to get estimate for fully locked implementation
 
   int idx;
   float maxVal = -std::numeric_limits<float>::max();
@@ -278,27 +353,20 @@ Action MCTS<State,Action>::selectAction(const State &state, bool usePlanningBoun
     ++currentActionIdx;
   }
 
-  return stateActions[maxActionIdx[rng->randomInt(maxActionIdx.size())]];
+  actionIdx = maxActionIdx[rng->randomInt(maxActionIdx.size())];
+  return stateActions[actionIdx];
 }
 
 template<class State, class Action>
-Action MultiThreadedMCTS<State, Action>::maxValueForState(const State &state) {
-
-  StateInfoTable::const_accessor a;
-  if (!stateInfo.find(a, state)) { // The state does not exist, choose an action randomly and act
-    return p.unknownBootstrapValue;
-  }
-  StateInfo stateInfo = a->second; // Create copy and release lock.
-  a.release();
-  if (stateInfo.stateVisits == 0) {
-    // Shouldn't be here, probably an artifact of threading
-    return p.unknownBootstrapValue;
-  }
+Action MultiThreadedMCTS<State, Action>::maxValueForState(const State &state,
+    const StateInfo& stateInfo) {
 
   int idx;
   float maxVal = -std::numeric_limits<float>::max();
+  unsigned int totalVisits = 0;
   BOOST_FOREACH(const boost::shared_ptr<StateActionInfo>& stateActionInfo, stateInfo->actionInfos) {
-    float val = calcActionValue(actionInfo, stateInfo, usePlanningBounds);
+    float val = calcActionValue(stateActionInfo, stateInfo, usePlanningBounds);
+    totalVisits += stateActionInfo->visits;
     if (val > maxVal) {
       maxVal = val;
     }
