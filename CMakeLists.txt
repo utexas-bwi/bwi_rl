@@ -28,3 +28,9 @@ add_library(${PROJECT_NAME}
   src/common/tinymt32.cpp
   src/common/Util.cpp
 )
+
+
+## Test Binaries
+add_executable(test_mt_mcts
+  test/test_mt_mcts.cpp
+)
