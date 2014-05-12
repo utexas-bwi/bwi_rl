@@ -109,7 +109,7 @@ class MultiThreadedMCTS {
 
     unsigned int search(const State &startState, 
         unsigned int& termination_count,
-        float maxPlanningtime = 1.0,
+        double maxPlanningtime = 1.0,
         int maxPlayouts = 0);
     void singleThreadedSearch();
     Action selectWorldAction(const State &state);
@@ -134,8 +134,8 @@ class MultiThreadedMCTS {
     unsigned int currentPlayouts;
     unsigned int terminatedPlayouts;
 
-    float maxPlanningTime;
-    float endPlanningTime;
+    double maxPlanningTime;
+    double endPlanningTime;
 
     Params p;
     boost::shared_ptr<RNG> rng;
@@ -154,7 +154,7 @@ template<class State, class StateHash, class Action>
 unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
     const State &startState, 
     unsigned int &termination_count,
-    float maxPlanningTime, int maxPlayouts) {
+    double maxPlanningTime, int maxPlayouts) {
 
   if (maxPlanningTime < 0) {
     std::cerr << "Invalid maxPlanningTime, must be >= 0" << std::endl;
@@ -172,16 +172,24 @@ unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
   terminatedPlayouts = 0;
   endPlanningTime = getTime() + maxPlanningTime;
 
+  // std::cout << "Starting search: " << maxPlayouts << " " << maxPlanningTime << std::endl;
+
+  // std::cin.ignore().get();
+
   MCTS_RESET_TIMINGS();
   MCTS_TIC(TOTAL);
 
   std::vector<boost::shared_ptr<boost::thread> > threads; 
   // Launch n - 1 threads;
   for (int n = 1; n < p.numThreads; ++n) {
+    /* std::cout << "launching thread" << std::endl; */
     boost::shared_ptr<boost::thread> thread(new
         boost::thread(&MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch,
           this));
   }
+
+  // std::cout << "launching thread" << std::endl;
+  // std::cin.ignore().get();
 
   // Launch search in the main thread
   singleThreadedSearch();
@@ -201,8 +209,14 @@ unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
 template<class State, class StateHash, class Action>
 void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
 
-  while ((maxPlanningTime <= 0.0) || (getTime() < endPlanningTime) && 
-         (maxPlayouts <= 0) || (currentPlayouts < maxPlayouts)) {
+  // TODO if this line is not here, bad stuff happens
+  std::cout << "Rolling out!" << ((maxPlanningTime <= 0.0) || (getTime() < endPlanningTime)) << 
+    " " << getTime() << " " << endPlanningTime << std::endl;
+
+  int count = 0;
+
+  while (((maxPlanningTime <= 0.0) || (getTime() < endPlanningTime)) && 
+         ((maxPlayouts <= 0) || (currentPlayouts < maxPlayouts))) {
 
     //TODO not locked
     ++currentPlayouts;
@@ -267,6 +281,7 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
     typedef std::pair<State, StateInfo> StateToInfoPair;
     std::vector<StateToInfoPair> statesToAdd;
 
+    std::cout << "Value: " << value << std::endl;
     for (int step = history.size() - 1; step >= 0; --step) {
 
       State &state = history[step].state;
@@ -280,7 +295,8 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
       typename StateInfoTable::const_accessor a;
       StateInfo stateInfo(num_actions, 0); 
       bool is_new_state = true;
-      if (stateInfoTable.find(a, state)) { // The state does not exist, choose an action randomly and act
+      if (stateInfoTable.find(a, state)) { // The state exists, choose an action randomly and act
+        // std::cout << "State: " << state << "found in table!" << std::endl;
         stateInfo = a->second; // Create copy and release lock.
         a.release(); //TODO improper locking
         is_new_state = false;
@@ -296,17 +312,24 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
       stateCount[state]--;
       if (stateCount[state] == 0) { // First Visit Monte Carlo
         stateInfo.stateVisits++;
+        /* bool is_new_action = false; */
         if (!stateInfo.actionInfos[action_idx]) {
           stateInfo.actionInfos[action_idx].reset(new StateActionInfo(0, 0));
-        }
+          /* is_new_action = true; */
+        }/* else {
+          std::cout << "  and so is action " << action_idx << " with value " << 
+            stateInfo.actionInfos[action_idx]->val << std::endl;
+        } */
         stateInfo.actionInfos[action_idx]->visits++;
         stateInfo.actionInfos[action_idx]->val += 
           (1.0 / stateInfo.actionInfos[action_idx]->visits) * 
           (value - stateInfo.actionInfos[action_idx]->val);
-
         if (is_new_state) {
-          statesToAdd.push_back(std::make_pair(state, stateInfo));
+          statesToAdd.push_back(typename StateInfoTable::value_type(state, stateInfo));
         }
+        // if (!is_new_action) {
+        //   std::cout << "  updated value to " << stateInfo.actionInfos[action_idx]->val << std::endl;
+        // }
       }
       
       if (!p.theoreticallyCorrectLambda) {
@@ -315,14 +338,20 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
         } // else don't change the value being backed up
       }
 
+      /* std::cout << "Value: " << value << std::endl; */
     }
 
-    // Finally add the states
+    MCTS_OUTPUT("------------ ADDING NEW STATES --------------");
+    /* Finally add the states */
     for (int s = statesToAdd.size() - 1; 
          s >= 0 && s >= statesToAdd.size() - p.maxNewNodesPerRollout;
          --s) {
       stateInfoTable.insert(statesToAdd[s]);
     }
+
+    // ++count;
+    // if (count == 7) 
+    // throw std::runtime_error("argh!");
   }
 }
 
@@ -358,11 +387,16 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &st
     bool usePlanningBounds, unsigned int& action_idx, unsigned int& num_actions) {
 
   std::vector<Action> stateActions;
-  this->model->getAllActions(state, stateActions);
+  if (!model) {
+    // TODO should never be here
+    model = modelUpdater->selectModel(startState);
+  }
+  model->getAllActions(state, stateActions);
 
   typename StateInfoTable::const_accessor a;
   if (!stateInfoTable.find(a, state)) { // The state does not exist, choose an action randomly
     action_idx = rng->randomInt(stateActions.size()); 
+    num_actions = stateActions.size();
     return stateActions[action_idx];
   }
   StateInfo stateInfo = a->second; // Create copy and release lock.
@@ -395,10 +429,8 @@ float MultiThreadedMCTS<State, StateHash, Action>::maxValueForState(const State 
 
   int idx;
   float maxVal = -std::numeric_limits<float>::max();
-  unsigned int totalVisits = 0;
   BOOST_FOREACH(const boost::shared_ptr<StateActionInfo>& stateActionInfo, stateInfo.actionInfos) {
     float val = calcActionValue(stateActionInfo, stateInfo, false);
-    totalVisits += stateActionInfo->visits;
     if (val > maxVal) {
       maxVal = val;
     }
