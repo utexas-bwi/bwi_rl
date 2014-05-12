@@ -20,8 +20,7 @@ public:
   Model () {}
   virtual ~Model () {}
 
-  virtual void setState(const State &state) = 0;
-  virtual void takeAction(const Action &action, float &reward, State &state, bool &terminal, int &depth_count) = 0;
+  virtual void takeAction(const State &state, const Action &action, float &reward, State &next_state, bool &terminal, int &depth_count) = 0;
   virtual void getFirstAction(const State &state, Action &action) = 0;
   virtual bool getNextAction(const State &state, Action &action) = 0; // returns true if there is a next action, else false
 

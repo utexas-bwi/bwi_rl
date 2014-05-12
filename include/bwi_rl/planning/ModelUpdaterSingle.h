@@ -22,8 +22,7 @@ public:
   }
   virtual ~ModelUpdaterSingle() {}
   
-  virtual boost::shared_ptr<Model<State,Action> > selectModel(const State &state) {
-    model->setState(state);
+  virtual boost::shared_ptr<Model<State,Action> > selectModel(const State &/*state*/) {
     return model;
   }
 
