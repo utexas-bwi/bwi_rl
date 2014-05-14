@@ -205,7 +205,7 @@ bool MCTS<State,Action>::rollout(const State &startState) {
     MCTS_TOC(SELECT_PLANNING_ACTION);
     //std::cout << action << std::endl;
     MCTS_TIC(TAKE_ACTION);
-    model->takeAction(action,reward,newState,terminal, depth_count);
+    model->takeAction(action,reward,newState,terminal, depth_count, rng);
     MCTS_TOC(TAKE_ACTION);
     modelUpdater->updateSimulationAction(action,newState);
     MCTS_TIC(VISIT);
