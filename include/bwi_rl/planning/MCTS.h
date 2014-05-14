@@ -73,7 +73,7 @@ public:
   Params_STRUCT(PARAMS)
 #undef PARAMS
 
-  MCTS (ValuePtr valueEstimator, ModelUpdaterPtr modelUpdater, StateMappingPtr stateMapping, const Params &p);
+  MCTS (ValuePtr valueEstimator, ModelUpdaterPtr modelUpdater, StateMappingPtr stateMapping, const boost::shared_ptr<RNG>& rng, const Params &p);
   virtual ~MCTS () {}
 
   unsigned int search(const State &startState, unsigned int& termination_count);
@@ -95,16 +95,19 @@ private:
   bool valid;
   double endPlanningTime;
 
+  boost::shared_ptr<RNG> rng;
   Params p;
 };
 
 ////////////////////////////////////////////////////////////////////////////
 
 template<class State, class Action>
-MCTS<State,Action>::MCTS (ValuePtr valueEstimator, ModelUpdaterPtr modelUpdater, StateMappingPtr stateMapping, const Params &p):
+MCTS<State,Action>::MCTS (ValuePtr valueEstimator, ModelUpdaterPtr modelUpdater, StateMappingPtr stateMapping, 
+    const boost::shared_ptr<RNG>& rng, const Params &p):
   valueEstimator(valueEstimator),
   modelUpdater(modelUpdater),
   stateMapping(stateMapping),
+  rng(rng),
   p(p)
 {
   checkInternals();
@@ -180,7 +183,7 @@ bool MCTS<State,Action>::rollout(const State &startState) {
   MCTS_TIC(SELECT_MODEL);
   ModelPtr model = modelUpdater->selectModel(startState);
   MCTS_TOC(SELECT_MODEL);
-  State state(startState);
+  State state(startState), discretizedState(startState);
   State newState;
   Action action;
   float reward;
@@ -193,26 +196,27 @@ bool MCTS<State,Action>::rollout(const State &startState) {
   valueEstimator->startRollout();
   MCTS_TOC(START_ROLLOUT);
   
-  stateMapping->map(state); // discretize state
+  stateMapping->map(discretizedState); // discretize state
 
   for (unsigned int depth = 0; (depth < p.maxDepth) || (p.maxDepth == 0); depth+=depth_count) {
     MCTS_OUTPUT("MCTS State: " << state << " " << "DEPTH: " << depth);
     if (terminal || ((p.maxPlanningTime > 0) && (getTime() > endPlanningTime)))
       break;
     MCTS_TIC(SELECT_PLANNING_ACTION);
-    action = valueEstimator->selectPlanningAction(state);
+    action = valueEstimator->selectPlanningAction(discretizedState);
     MCTS_OUTPUT("ACTION: " << action);
     MCTS_TOC(SELECT_PLANNING_ACTION);
     //std::cout << action << std::endl;
     MCTS_TIC(TAKE_ACTION);
-    model->takeAction(action,reward,newState,terminal, depth_count, rng);
+    model->takeAction(state, action, reward, newState, terminal, depth_count, rng);
     MCTS_TOC(TAKE_ACTION);
     modelUpdater->updateSimulationAction(action,newState);
     MCTS_TIC(VISIT);
     valueEstimator->visit(state,action,reward);
     MCTS_TOC(VISIT);
     state = newState;
-    stateMapping->map(state); // discretize state
+    discretizedState = newState;
+    stateMapping->map(discretizedState); // discretize state
   }
 
   MCTS_TIC(FINISH_ROLLOUT);

@@ -13,7 +13,8 @@
 #include <bwi_rl/planning/ModelUpdater.h>
 #include <bwi_rl/planning/StateMapping.h>
 
-#include <tbb/concurrent_hash_map.h>
+/* #include <tbb/concurrent_hash_map.h> */
+#include <tbb/concurrent_unordered_map.h>
 /* #include <tbb/parallel_for.h> */
 
 #ifdef MCTS_DEBUG
@@ -87,7 +88,8 @@ class MultiThreadedMCTS {
     typedef typename ModelUpdater<State,Action>::Ptr ModelUpdaterPtr;
     typedef typename Model<State,Action>::Ptr ModelPtr;
     typedef typename StateMapping<State>::Ptr StateMappingPtr;
-    typedef typename tbb::concurrent_hash_map<State, StateInfo, StateHash> StateInfoTable;
+    typedef typename tbb::concurrent_unordered_map<State, StateInfo, StateHash> StateInfoTable;
+    /* typedef typename std::map<State, StateInfo> StateInfoTable; */
 
 #define PARAMS(_) \
     _(unsigned int,maxDepth,maxDepth,0) \
@@ -119,7 +121,7 @@ class MultiThreadedMCTS {
 
   private:
     float calcActionValue(const boost::shared_ptr<StateActionInfo> &actionInfo,
-        const StateInfo &state, bool usePlanningBounds);
+        const StateInfo &stateInfo, bool usePlanningBounds);
     float maxValueForState(const State &state, const StateInfo& stateInfo);
     Action selectAction(const State &state, bool usePlanningBounds, 
         unsigned int& action_idx, unsigned int& numActions, boost::shared_ptr<RNG>& rng);
@@ -273,13 +275,11 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
     if (!terminal) {
       // Get bootstrap value of final state
       // http://stackoverflow.com/questions/11275444/c-template-typename-iterator
-      typename StateInfoTable::const_accessor a;
-      if (!stateInfoTable.find(a, state)) { // The state does not exist, choose an action randomly
+      typename StateInfoTable::const_iterator a = stateInfoTable.find(state);
+      if (a == stateInfoTable.end()) { // The state does not exist, choose an action randomly
         backpropValue = p.unknownBootstrapValue;
       } else {
-        StateInfo stateInfo = a->second; // Create copy and release lock.
-        a.release(); // TODO locking released early
-        backpropValue = maxValueForState(state, stateInfo);
+        backpropValue = maxValueForState(state, a->second);
       }
     }
     MCTS_OUTPUT("At state: " << state << " the backprop value is " << backpropValue);
@@ -298,11 +298,11 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
       backpropValue = reward + p.gamma * backpropValue;
       
       // Get information about this state
-      typename StateInfoTable::accessor a;
+      typename StateInfoTable::iterator a = stateInfoTable.find(state);
       StateInfo stateInfo(num_actions, 0); 
       boost::shared_ptr<StateActionInfo> actionInfo;
       bool is_new_state = true;
-      if (stateInfoTable.find(a, state)) { // The state exists, choose an action randomly and act
+      if (a != stateInfoTable.end()) { // The state exists, choose an action randomly and act
         MCTS_OUTPUT("  State: " << state << " found in table!");
         a->second.stateVisits++;
         if (!a->second.actionInfos[action_idx]) {
@@ -319,7 +319,6 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
         stateInfo.stateVisits++;
         actionInfo = stateInfo.actionInfos[action_idx];
       }
-      a.release(); //TODO locking released early
 
       float thisStateValue = backpropValue;
       if (p.theoreticallyCorrectLambda) {
@@ -408,21 +407,19 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &st
   std::vector<Action> stateActions;
   model->getAllActions(state, stateActions);
 
-  typename StateInfoTable::const_accessor a;
-  if (!stateInfoTable.find(a, state)) { // The state does not exist, choose an action randomly
+  typename StateInfoTable::const_iterator a = stateInfoTable.find(state);
+  if (a == stateInfoTable.end()) { // The state does not exist, choose an action randomly
     action_idx = rng->randomInt(stateActions.size()); 
     num_actions = stateActions.size();
     return stateActions[action_idx];
   }
-  StateInfo stateInfo = a->second; // Create copy and release lock.
-  a.release(); // TODO locking released early
 
   int idx;
   float maxVal = -std::numeric_limits<float>::max();
   std::vector<unsigned int> maxActionIdx;
   unsigned int currentActionIdx = 0;
-  BOOST_FOREACH(const boost::shared_ptr<StateActionInfo>& actionInfo, stateInfo.actionInfos) {
-    float val = calcActionValue(actionInfo, stateInfo, usePlanningBounds);
+  BOOST_FOREACH(const boost::shared_ptr<StateActionInfo>& actionInfo, a->second.actionInfos) {
+    float val = calcActionValue(actionInfo, a->second, usePlanningBounds);
     if (fabs(val - maxVal) < 1e-10) {
       maxActionIdx.push_back(currentActionIdx);
     } else if (val > maxVal) {
@@ -472,25 +469,23 @@ std::string MultiThreadedMCTS<State, StateHash, Action>::generateDescription(uns
 template<class State, class StateHash, class Action>
 std::string MultiThreadedMCTS<State, StateHash, Action>::getStateValuesDescription(const State& state) {
   std::stringstream ss;
-  typename StateInfoTable::const_accessor a;
-  if (!stateInfoTable.find(a, state)) { // The state does not exist, choose an action randomly
+  typename StateInfoTable::const_iterator a = stateInfoTable.find(state);
+  if (a == stateInfoTable.end()) { // The state does not exist, choose an action randomly
     ss << state << ": Not in table!";
     return ss.str();
   }
-  StateInfo stateInfo = a->second; // Create copy and release lock. 
-  a.release(); // TODO locking released early
 
-  float maxVal = maxValueForState(state, stateInfo);
-  ss << state << " " << maxVal << "(" << stateInfo.stateVisits << "): ";
+  float maxVal = maxValueForState(state, a->second);
+  ss << state << " " << maxVal << "(" << a->second.stateVisits << "): ";
   unsigned int count = 0;
-  BOOST_FOREACH(const boost::shared_ptr<StateActionInfo>& actionInfo, stateInfo.actionInfos) {
-    float val = calcActionValue(actionInfo, stateInfo, false);
+  BOOST_FOREACH(const boost::shared_ptr<StateActionInfo>& actionInfo, a->second.actionInfos) {
+    float val = calcActionValue(actionInfo, a->second, false);
     unsigned int na = 0;
     if (actionInfo) {
       na = actionInfo->visits;
     }
     ss << "  #" << count << " " << val << "(" << na << ")";
-    if (count != stateInfo.actionInfos.size() - 1)
+    if (count != a->second.actionInfos.size() - 1)
       ss << " "; 
     ++count;
   }
