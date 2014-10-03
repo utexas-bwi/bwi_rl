@@ -11,10 +11,8 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <build_depend>libblas-dev</build_depend>
-  <build_depend>tbb</build_depend>
-
-  <run_depend>libblas-dev</run_depend>
+  <build_depend>bwi_tools</build_depend>
+  <run_depend>bwi_tools</run_depend>
 
 </package>
 

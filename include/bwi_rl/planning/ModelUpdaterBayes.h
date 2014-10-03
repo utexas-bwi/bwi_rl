@@ -11,8 +11,8 @@ Modified: 2011-10-02
 
 #include "ModelUpdaterDiscrete.h"
 #include <bwi_rl/gtest/gtest_prod.h>
-#include <bwi_rl/common/Params.h>
-#include <bwi_rl/common/Enum.h>
+#include <bwi_tools/common/Params.h>
+#include <bwi_tools/common/Enum.h>
 
 ENUM(ModelUpdateType,
   bayesian,

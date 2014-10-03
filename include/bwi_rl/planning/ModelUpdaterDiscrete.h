@@ -12,8 +12,8 @@ Description: abstract class for updating a set of discrete models
 #include <boost/shared_ptr.hpp>
 #include <boost/lexical_cast.hpp>
 #include "ModelUpdater.h"
-#include <bwi_rl/common/RNG.h>
-#include <bwi_rl/common/Util.h>
+#include <bwi_tools/common/RNG.h>
+#include <bwi_tools/common/Util.h>
 
 template<class State, class Action>
 struct ModelInfo {

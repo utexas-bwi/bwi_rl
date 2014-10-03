@@ -11,7 +11,7 @@ Created:  2011-08-23
 Modified: 2013-08-08
 */
 
-#include <bwi_rl/common/RNG.h>
+#include <bwi_tools/common/RNG.h>
 #include <boost/shared_ptr.hpp>
 #include <string>
 #include <vector>

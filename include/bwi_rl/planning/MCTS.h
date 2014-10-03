@@ -16,8 +16,8 @@ Modified: 2011-12-13
 #include "ValueEstimator.h"
 #include "ModelUpdater.h"
 #include "StateMapping.h"
-#include <bwi_rl/common/Util.h>
-#include <bwi_rl/common/Params.h>
+#include <bwi_tools/common/Util.h>
+#include <bwi_tools/common/Params.h>
 
 //#define MCTS_DEBUG
 //#define MCTS_TIMINGS
@@ -29,7 +29,7 @@ Modified: 2011-12-13
 #endif
 
 #ifdef MCTS_TIMINGS
-#include <bwi_rl/common/Enum.h>
+#include <bwi_tools/common/Enum.h>
 #define MCTS_TIC(_) tic(MCTS_Timer::_)
 #define MCTS_TOC(_) toc(MCTS_Timer::_)
 #define MCTS_PRINT_TIMINGS() for(int i = 0; i < MCTS_Timer::NUM; i++) { \

@@ -21,10 +21,10 @@ Modified: 2013-08-08
 
 #include "ValueEstimator.h"
 #include "Model.h"
-#include <bwi_rl/common/RNG.h>
-#include <bwi_rl/common/DefaultMap.h>
-#include <bwi_rl/common/Util.h>
-#include <bwi_rl/common/Params.h>
+#include <bwi_tools/common/RNG.h>
+#include <bwi_tools/common/DefaultMap.h>
+#include <bwi_tools/common/Util.h>
+#include <bwi_tools/common/Params.h>
 
 #ifdef UCT_DEBUG
 #define UCT_OUTPUT(x) std::cout << x << std::endl

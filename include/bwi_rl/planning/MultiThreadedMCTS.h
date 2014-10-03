@@ -5,9 +5,9 @@
 #include <boost/thread/thread.hpp>
 #include <boost/tuple/tuple.hpp>
 
-#include <bwi_rl/common/RNG.h>
-#include <bwi_rl/common/Params.h>
-#include <bwi_rl/common/Util.h>
+#include <bwi_tools/common/RNG.h>
+#include <bwi_tools/common/Params.h>
+#include <bwi_tools/common/Util.h>
 
 #include <bwi_rl/planning/Model.h>
 /* #include <bwi_rl/planning/MultiThreadedMCTSEstimator.h> */
