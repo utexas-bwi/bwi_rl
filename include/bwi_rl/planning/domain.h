@@ -1,6 +1,8 @@
 #ifndef BWI_RL_PLANNING_DOMAIN_H
 #define BWI_RL_PLANNING_DOMAIN_H
 
+#include <bwi_tools/json/json.h> 
+
 namespace bwi_rl {
 
   class Domain {

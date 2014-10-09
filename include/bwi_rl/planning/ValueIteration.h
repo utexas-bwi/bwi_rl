@@ -25,11 +25,20 @@ Created:  2013-07-23
 template<class State, class Action>
 class ValueIteration {
 public:
+
+#define PARAMS(_) \
+    _(float,gamma,gamma,1.0) \
+    _(float,epsilon,epsilon,1e-2) \
+    _(unsigned int,max_iter,max_iter,1000) \
+    _(float,max_value,max_value,std::numeric_limits<float>::max()) \
+    _(float,min_value,min_value,-std::numeric_limits<float>::max())
+
+    Params_STRUCT(PARAMS)
+#undef PARAMS
+
   ValueIteration (boost::shared_ptr<PredictiveModel<State, Action> > model,
       boost::shared_ptr<VIEstimator<State, Action> > value_estimator,
-      float gamma = 1.0, float epsilon = 1e-2, unsigned int max_iter = 1000,
-      float max_value = std::numeric_limits<float>::max(),
-      float min_value = -std::numeric_limits<float>::max());
+      Params params = Params());
   virtual ~ValueIteration () {}
 
   void computePolicy();
@@ -46,11 +55,7 @@ private:
   boost::shared_ptr<PredictiveModel<State, Action> > model_;
   boost::shared_ptr<VIEstimator<State, Action> > value_estimator_;
 
-  float gamma_;
-  float epsilon_;
-  float max_iter_;
-  float max_value_;
-  float min_value_;
+  Params params_;
 
   bool policy_available_;
 
@@ -60,18 +65,14 @@ template<class State, class Action>
 ValueIteration<State, Action>::ValueIteration(
     boost::shared_ptr<PredictiveModel<State, Action> > model,
     boost::shared_ptr<VIEstimator<State, Action> > value_estimator,
-    float gamma, float epsilon, unsigned int max_iter,
-    float max_value, float min_value) : model_(model), 
-  value_estimator_(value_estimator), gamma_(gamma), epsilon_(epsilon), 
-  max_iter_(max_iter), max_value_(max_value), min_value_(min_value),
-  policy_available_(false) {}
+    Params params) : model_(model), value_estimator_(value_estimator), params_(params), policy_available_(false) {}
 
 template<class State, class Action>
 void ValueIteration<State,Action>::computePolicy() {
 
   bool change = true;
   size_t count = 0;
-  while(change && count < max_iter_) {
+  while(change && count < params_.max_iter) {
     float max_value_change = -std::numeric_limits<float>::max();
     count++;
     VI_OUTPUT("Iteration #" << count);
@@ -102,7 +103,7 @@ void ValueIteration<State,Action>::computePolicy() {
           float& reward = rewards[ns_counter];
           float& probability =  probabilities[ns_counter];
           float ns_value = value_estimator_->getValue(ns);
-          action_value += probability * (reward + gamma_ * ns_value);
+          action_value += probability * (reward + params_.gamma * ns_value);
         }
 
         if (action_value > value) {
@@ -110,8 +111,8 @@ void ValueIteration<State,Action>::computePolicy() {
           best_action = action;
         }
       }
-      value = std::max(min_value_, value);
-      value = std::min(max_value_, value);
+      value = std::max(params_.min_value, value);
+      value = std::min(params_.max_value, value);
       float value_change = fabs(value_estimator_->getValue(state) - value);
       max_value_change = std::max(max_value_change, value_change);
       value_estimator_->updateValue(state, value);
@@ -119,7 +120,7 @@ void ValueIteration<State,Action>::computePolicy() {
       /* VI_OUTPUT("  State #" << state << " value is " << value); */
     }
     VI_OUTPUT("  max change = " << max_value_change);
-    change = max_value_change > epsilon_;
+    change = max_value_change > params_.epsilon;
   }
   policy_available_ = true;
 }
