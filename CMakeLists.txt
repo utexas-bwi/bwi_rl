@@ -1,9 +1,32 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(bwi_rl)
 
-find_package(catkin REQUIRED COMPONENTS bwi_tools)
+find_package(catkin REQUIRED COMPONENTS bwi_tools pluginlib)
+find_package(Boost REQUIRED COMPONENTS program_options)
 
 catkin_package(
   INCLUDE_DIRS include
-  CATKIN_DEPENDS bwi_tools
+  CATKIN_DEPENDS bwi_tools pluginlib
+)
+
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
+  ${Boost_INCLUDE_DIRS}
+)
+
+add_executable(evaluator
+  src/evaluator.cpp
+)
+target_link_libraries(evaluator 
+  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
+)
+
+## Mark executables and/or libraries for installation
+install(TARGETS 
+  evaluator
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
