@@ -137,6 +137,7 @@ MultiThreadedMCTS<State, StateHash, Action>::MultiThreadedMCTS(
     boost::shared_ptr<RNG> masterRng, const Params &p) : // valueEstimator(valueEstimator),
     modelUpdater(modelUpdater), stateMapping(stateMapping), masterRng(masterRng), p(p) {}
 
+// TODO also allowing restriction of first action.
 template<class State, class StateHash, class Action>
 unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
     const State &startState, 
