@@ -65,11 +65,11 @@ class MultiThreadedMCTS {
 
 #define PARAMS(_) \
     _(unsigned int,maxDepth,maxDepth,0) \
-    _(int,numThreads,numThreads,8) \
+    _(int,numThreads,numThreads,1) \
     _(float,lambda,lambda,0.0) \
     _(float,gamma,gamma,1.0) \
     _(float,rewardBound,rewardBound,10000) \
-    _(float,maxNewStatesPerRollout,maxNewStatesPerRollout,5) \
+    _(float,maxNewStatesPerRollout,maxNewStatesPerRollout,0) \
     _(float,unknownActionValue,unknownActionValue,-1e10) \
     _(float,unknownActionPlanningValue,unknownActionPlanningValue,1e10) \
     _(float,unknownBootstrapValue,unknownBootstrapValue,0.0) \
@@ -163,7 +163,6 @@ unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
 
   std::vector<boost::shared_ptr<boost::thread> > threads; 
   // Launch n - 1 threads;
-  std::cout << "MCTS: Spawning " << p.numThreads << " threads." << std::endl; 
   for (int n = 1; n < p.numThreads; ++n) {
     boost::shared_ptr<boost::thread> thread(new
         boost::thread(&MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch,
@@ -343,7 +342,7 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectWorldAction(const Stat
   State mappedState(state);
   stateMapping->map(mappedState); // discretize state
 #ifdef MCTS_VALUE_DEBUG
-  std::cout << getStateValuesDescription(state) << std::endl;
+  std::cout << "    " << getStateValuesDescription(state) << std::endl;
 #endif
   boost::shared_ptr<RNG> rng(new RNG(masterRng->randomUInt()));
   HistoryStep unused_step;
@@ -456,7 +455,7 @@ std::string MultiThreadedMCTS<State, StateHash, Action>::getStateValuesDescripti
   BOOST_FOREACH(const StateActionInfo &action_info, a->second.action_infos) {
     float val = calcActionValue(action_info, a->second, false);
     unsigned int na = action_info.visits;
-    ss << "  #" << count << " " << val << "(" << na << ")";
+    ss << " #" << count << " " << val << "(" << na << ")";
     if (count != a->second.action_infos.size() - 1)
       ss << " "; 
     ++count;
