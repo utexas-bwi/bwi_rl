@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
     for (unsigned domain_idx = 0; domain_idx < domains_json.size(); ++domain_idx) {
       std::string domain_name = domains_json[domain_idx]["domain"].asString();
       boost::shared_ptr<Domain> domain = class_loader.createInstance(domain_name);
-      if (!(domain->initialize(experiment_, base_directory_))) {
+      if (!(domain->initialize(domains_json[domain_idx], base_directory_))) {
         ROS_FATAL("Could not initialize domain.");
         return -1;
       }
