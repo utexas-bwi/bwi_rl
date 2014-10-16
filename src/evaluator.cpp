@@ -3,6 +3,7 @@
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/foreach.hpp>
 #include <pluginlib/class_loader.h>
 
 #include <bwi_rl/planning/domain.h>
@@ -79,13 +80,18 @@ int main(int argc, char** argv) {
 
   // Load the domain using pluginlib.
   pluginlib::ClassLoader<Domain> class_loader("bwi_rl", "bwi_rl::Domain");
-  boost::shared_ptr<Domain> domain;
+  std::vector<boost::shared_ptr<Domain> > domains;
+
+  Json::Value domains_json = experiment_["domains"];
   try {
-    std::string domain_name = experiment_["domain"].asString();
-    domain = class_loader.createInstance(domain_name);
-    if (!(domain->initialize(experiment_, base_directory_))) {
-      ROS_FATAL("Could not initialize domain.");
-      return -1;
+    for (unsigned domain_idx = 0; domain_idx < domains_json.size(); ++domain_idx) {
+      std::string domain_name = domains_json[domain_idx]["domain"].asString();
+      boost::shared_ptr<Domain> domain = class_loader.createInstance(domain_name);
+      if (!(domain->initialize(experiment_, base_directory_))) {
+        ROS_FATAL("Could not initialize domain.");
+        return -1;
+      }
+      domains.push_back(domain);
     }
   } catch(pluginlib::PluginlibException& ex) {
     // Print an error should any solver fail to load.
@@ -95,16 +101,21 @@ int main(int argc, char** argv) {
 
   // See if this is a precomputation request only.
   if (precompute_only_ != -1) {
-    for (int i = 0; i < num_instances_; ++i) {
-      domain->precomputeAndSavePolicy(precompute_only_ + i);
+    BOOST_FOREACH(boost::shared_ptr<Domain> &domain, domains) {
+      for (int i = 0; i < num_instances_; ++i) {
+        domain->precomputeAndSavePolicy(precompute_only_ + i);
+      }
     }
-
     return 0;
   }
 
   // Otherwise let's start testing instances!
   for (int i = 0; i < num_instances_; ++i) {
-    domain->testInstance(seed_ + i);
+    BOOST_FOREACH(boost::shared_ptr<Domain> &domain, domains) {
+      for (int i = 0; i < num_instances_; ++i) {
+        domain->testInstance(seed_ + i);
+      }
+    }
   }
 
   return 0;
