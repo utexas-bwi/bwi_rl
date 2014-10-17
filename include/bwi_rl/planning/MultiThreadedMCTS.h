@@ -383,10 +383,10 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &st
         }
         ++currentActionIdx;
       }
-      history_step.action_id = maxActionIdx[rng->randomInt(maxActionIdx.size())];
+      history_step.action_id = maxActionIdx[rng->randomInt(maxActionIdx.size() - 1)];
     } else {
       // TODO switch this to default policy class.
-      history_step.action_id = rng->randomInt(stateActions.size()); 
+      history_step.action_id = rng->randomInt(stateActions.size() - 1); 
     }
     history_step.update_this_state = true;
   } else if ((new_states_added_in_rollout < p.maxNewStatesPerRollout) || (p.maxNewStatesPerRollout == 0)) {
@@ -396,13 +396,13 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &st
     boost::tie(history_step.state_info, unused_bool) = 
       stateInfoTable.insert(std::pair<State, StateInfo>(state, new_state_info));
     // TODO switch this to default policy class.
-    history_step.action_id = rng->randomInt(stateActions.size()); 
+    history_step.action_id = rng->randomInt(stateActions.size() - 1); 
     history_step.update_this_state = true;
     ++new_states_added_in_rollout;
   } else {
     // Just store the history step since it's not necessary to add the state-action pair.
     // TODO switch this to default policy class.
-    history_step.action_id = rng->randomInt(stateActions.size()); 
+    history_step.action_id = rng->randomInt(stateActions.size() - 1); 
     history_step.update_this_state = false;
   }
 

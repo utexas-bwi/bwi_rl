@@ -237,7 +237,7 @@ Action UCTEstimator<State,Action>::selectAction(const State &state, bool useBoun
     for (this->model->getFirstAction(state,a); actionValid; actionValid = this->model->getNextAction(state,a)) {
       maxActions.push_back(a);
     }
-    return maxActions[rng->randomInt(maxActions.size())];
+    return maxActions[rng->randomInt(maxActions.size() - 1)];
   }
 
   StateInfo *stateInfo = &(it->second);
@@ -282,7 +282,7 @@ Action UCTEstimator<State,Action>::selectAction(const State &state, bool useBoun
     //std::cout << std::endl;
   //}
   
-  return maxActions[rng->randomInt(maxActions.size())];
+  return maxActions[rng->randomInt(maxActions.size() - 1)];
 }
 
 template<class State, class Action>

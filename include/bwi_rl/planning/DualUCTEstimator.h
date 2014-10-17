@@ -153,7 +153,7 @@ Action DualUCTEstimator<State,Action>::selectAction(const State &state, bool use
   //}
   
   //std::cout << "BOTTOM SELECT ACTION " << maxActions.size() << std::endl << std::flush;
-  return maxActions[rng->randomInt(maxActions.size())];
+  return maxActions[rng->randomInt(maxActions.size() - 1)];
 }
   
 template<class State, class Action>
