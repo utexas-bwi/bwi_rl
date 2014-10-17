@@ -342,7 +342,7 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectWorldAction(const Stat
   State mappedState(state);
   stateMapping->map(mappedState); // discretize state
 #ifdef MCTS_VALUE_DEBUG
-  std::cout << "    " << getStateValuesDescription(state) << std::endl;
+  std::cout << "    " << getStateValuesDescription(mappedState) << std::endl;
 #endif
   boost::shared_ptr<RNG> rng(new RNG(masterRng->randomUInt()));
   HistoryStep unused_step;
