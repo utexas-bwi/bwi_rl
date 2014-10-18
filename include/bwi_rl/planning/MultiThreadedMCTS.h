@@ -9,6 +9,7 @@
 #include <bwi_tools/common/Params.h>
 #include <bwi_tools/common/Util.h>
 
+#include <bwi_rl/planning/DefaultPolicy.h>
 #include <bwi_rl/planning/Model.h>
 /* #include <bwi_rl/planning/MultiThreadedMCTSEstimator.h> */
 #include <bwi_rl/planning/ModelUpdater.h>
@@ -48,7 +49,7 @@ class MultiThreadedMCTS {
   public:
 
     typedef boost::shared_ptr<MultiThreadedMCTS<State, StateHash, Action> > Ptr;
-    /* typedef typename MultiThreadedMCTSEstimator<State,Action>::Ptr ValuePtr; */
+    typedef typename DefaultPolicy<State,Action>::Ptr DefaultPolicyPtr;
     typedef typename ModelUpdater<State,Action>::Ptr ModelUpdaterPtr;
     typedef typename Model<State,Action>::Ptr ModelPtr;
     typedef typename StateMapping<State>::Ptr StateMappingPtr;
@@ -78,7 +79,7 @@ class MultiThreadedMCTS {
     Params_STRUCT(PARAMS)
 #undef PARAMS
 
-    MultiThreadedMCTS (/*ValuePtr valueEstimator, */ModelUpdaterPtr modelUpdater,
+    MultiThreadedMCTS (DefaultPolicyPtr defaultPolicy, ModelUpdaterPtr modelUpdater,
         StateMappingPtr stateMapping, boost::shared_ptr<RNG> masterRng, const Params &p);
     virtual ~MultiThreadedMCTS () {}
 
@@ -112,6 +113,7 @@ class MultiThreadedMCTS {
 
   private:
     ModelPtr model;
+    DefaultPolicyPtr defaultPolicy;
     ModelUpdaterPtr modelUpdater;
     StateMappingPtr stateMapping;
     bool valid;
@@ -132,9 +134,9 @@ class MultiThreadedMCTS {
 
 template<class State, class StateHash, class Action>
 MultiThreadedMCTS<State, StateHash, Action>::MultiThreadedMCTS(
-    /* ValuePtr valueEstimator, */
+    DefaultPolicyPtr defaultPolicy, 
     ModelUpdaterPtr modelUpdater, StateMappingPtr stateMapping, 
-    boost::shared_ptr<RNG> masterRng, const Params &p) : // valueEstimator(valueEstimator),
+    boost::shared_ptr<RNG> masterRng, const Params &p) : defaultPolicy(defaultPolicy),
     modelUpdater(modelUpdater), stateMapping(stateMapping), masterRng(masterRng), p(p) {}
 
 // TODO also allowing restriction of first action.
@@ -385,8 +387,7 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &st
       }
       history_step.action_id = maxActionIdx[rng->randomInt(maxActionIdx.size() - 1)];
     } else {
-      // TODO switch this to default policy class.
-      history_step.action_id = rng->randomInt(stateActions.size() - 1); 
+      history_step.action_id = defaultPolicy->getBestAction(state, stateActions, rng);
     }
     history_step.update_this_state = true;
   } else if ((new_states_added_in_rollout < p.maxNewStatesPerRollout) || (p.maxNewStatesPerRollout == 0)) {
@@ -395,14 +396,12 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &st
     bool unused_bool;
     boost::tie(history_step.state_info, unused_bool) = 
       stateInfoTable.insert(std::pair<State, StateInfo>(state, new_state_info));
-    // TODO switch this to default policy class.
-    history_step.action_id = rng->randomInt(stateActions.size() - 1); 
+    history_step.action_id = defaultPolicy->getBestAction(state, stateActions, rng);
     history_step.update_this_state = true;
     ++new_states_added_in_rollout;
   } else {
     // Just store the history step since it's not necessary to add the state-action pair.
-    // TODO switch this to default policy class.
-    history_step.action_id = rng->randomInt(stateActions.size() - 1); 
+    history_step.action_id = defaultPolicy->getBestAction(state, stateActions, rng);
     history_step.update_this_state = false;
   }
 
@@ -450,14 +449,14 @@ std::string MultiThreadedMCTS<State, StateHash, Action>::getStateValuesDescripti
   }
 
   float maxVal = maxValueForState(state, a->second);
-  ss << state << " " << maxVal << "(" << a->second.state_visits << "): ";
+  ss << state << " " << maxVal << "(" << a->second.state_visits << "): " << std::endl;
   unsigned int count = 0;
+  std::vector<Action> actions;
+  model->getAllActions(state, actions);
   BOOST_FOREACH(const StateActionInfo &action_info, a->second.action_infos) {
     float val = calcActionValue(action_info, a->second, false);
     unsigned int na = action_info.visits;
-    ss << " #" << count << " " << val << "(" << na << ")";
-    if (count != a->second.action_infos.size() - 1)
-      ss << " "; 
+    ss << "      #" << actions[count] << " " << val << "(" << na << ")" << std::endl;
     ++count;
   }
 
