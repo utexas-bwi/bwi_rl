@@ -349,6 +349,41 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectWorldAction(const Stat
   boost::shared_ptr<RNG> rng(new RNG(masterRng->randomUInt()));
   HistoryStep unused_step;
   unsigned int unused_new_states_counter = 0;
+
+#ifdef MCTS_VALUE_DEBUG
+  // Don't remove the code, this generates the string for the best trajectory given the current state table.
+  // std::stringstream ss;
+  // ss << "    Best Trajectory: " << std::endl;
+  // State start_state = state;
+  // State discretized_state = start_state;
+  // stateMapping->map(discretized_state);
+  // int depth = 0;
+  // bool terminal = false;
+  // float total_reward = 0.0f;
+  // while(depth < p.maxDepth && !terminal) {
+  //   // Select action, take it and update the model with the action taken in simulation.
+  //   ss << "      State: " << start_state << std::endl;
+  //   ss << "      Discretized State: " << discretized_state << ", Depth: " << depth << std::endl;
+  //   ss << "    " << getStateValuesDescription(discretized_state) << std::endl;
+  //   HistoryStep unused_step;
+  //   unsigned int unused_new_states_counter = 0;
+  //   Action action = selectAction(discretized_state, false, unused_step, unused_new_states_counter, masterRng);
+  //   State next_state;
+  //   float reward;
+  //   int depth_count;
+  //   model->takeAction(start_state, action, reward, next_state, terminal, depth_count, masterRng);
+  //   total_reward += reward;
+  //   depth += depth_count;
+  //   ss << "      Action Selected: " << action << ", Reward: " << reward << std::endl;
+  //   start_state = next_state;
+  //   discretized_state = next_state;
+  //   stateMapping->map(discretized_state);
+  // }
+  // std::cout << ss.str();
+  // ss << "    Total Reward in best trajectory: " << total_reward << std::endl;
+  // throw std::runtime_error("blah!");
+#endif
+
   return selectAction(mappedState, false, unused_step, unused_new_states_counter, rng);
 }
 
@@ -467,7 +502,6 @@ template<class State, class StateHash, class Action>
 std::string MultiThreadedMCTS<State, StateHash, Action>::getStateTableDescription() {
   std::stringstream ss;
   int count = 0;
-  // TODO sometimes this gives an extra state. not sure why.
   for (typename StateInfoTable::const_iterator v = stateInfoTable.begin();
       v != stateInfoTable.end(); ++v) {
     ss << "State #" << count << ": " << getStateValuesDescription(v->first) << std::endl; 
