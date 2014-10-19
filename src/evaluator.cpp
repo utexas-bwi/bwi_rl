@@ -110,11 +110,9 @@ int main(int argc, char** argv) {
   }
 
   // Otherwise let's start testing instances!
-  for (int i = 0; i < num_instances_; ++i) {
-    BOOST_FOREACH(boost::shared_ptr<Domain> &domain, domains) {
-      for (int i = 0; i < num_instances_; ++i) {
-        domain->testInstance(seed_ + i);
-      }
+  BOOST_FOREACH(boost::shared_ptr<Domain> &domain, domains) {
+    for (int i = 0; i < num_instances_; ++i) {
+      domain->testInstance(seed_ + i);
     }
   }
 
