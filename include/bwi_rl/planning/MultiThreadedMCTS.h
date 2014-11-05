@@ -89,6 +89,7 @@ class MultiThreadedMCTS {
         int maxPlayouts = 0);
     void singleThreadedSearch();
     Action selectWorldAction(const State &state);
+    void printBestTrajectory(const State &state, Action action);
     void restart();
     std::string generateDescription(unsigned int indentation = 0);
 
@@ -350,43 +351,50 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectWorldAction(const Stat
   HistoryStep unused_step;
   unsigned int unused_new_states_counter = 0;
 
-#ifdef MCTS_VALUE_DEBUG
-  // Don't remove the code, this generates the string for the best trajectory given the current state table.
-  // std::stringstream ss;
-  // ss << "    Best Trajectory: " << std::endl;
-  // State start_state = state;
-  // State discretized_state = start_state;
-  // stateMapping->map(discretized_state);
-  // int depth = 0;
-  // bool terminal = false;
-  // float total_reward = 0.0f;
-  // while(depth < p.maxDepth && !terminal) {
-  //   // Select action, take it and update the model with the action taken in simulation.
-  //   ss << "      State: " << start_state << std::endl;
-  //   ss << "      Discretized State: " << discretized_state << ", Depth: " << depth << std::endl;
-  //   ss << "    " << getStateValuesDescription(discretized_state) << std::endl;
-  //   HistoryStep unused_step;
-  //   unsigned int unused_new_states_counter = 0;
-  //   Action action = selectAction(discretized_state, false, unused_step, unused_new_states_counter, masterRng);
-  //   State next_state;
-  //   float reward;
-  //   int depth_count;
-  //   model->takeAction(start_state, action, reward, next_state, terminal, depth_count, masterRng);
-  //   total_reward += reward;
-  //   depth += depth_count;
-  //   ss << "      Action Selected: " << action << ", Reward: " << reward << std::endl;
-  //   start_state = next_state;
-  //   discretized_state = next_state;
-  //   stateMapping->map(discretized_state);
-  // }
-  // std::cout << ss.str();
-  // ss << "    Total Reward in best trajectory: " << total_reward << std::endl;
-  // throw std::runtime_error("blah!");
-#endif
 
   return selectAction(mappedState, false, unused_step, unused_new_states_counter, rng);
 }
 
+template<class State, class StateHash, class Action>
+void MultiThreadedMCTS<State, StateHash, Action>::printBestTrajectory(const State &state, Action action) {
+  // Don't remove the code, this generates the string for the best trajectory given the current state table.
+  std::stringstream ss;
+  ss << "    Best Trajectory: " << std::endl;
+  State start_state = state;
+  State discretized_state = start_state;
+  stateMapping->map(discretized_state);
+  int depth = 0;
+  bool terminal = false;
+  float total_reward = 0.0f;
+  bool first = true;
+  while(depth < p.maxDepth && !terminal) {
+    // Select action, take it and update the model with the action taken in simulation.
+    ss << "      State: " << start_state << std::endl;
+    ss << "      Discretized State: " << discretized_state << ", Depth: " << depth << std::endl;
+    ss << "    " << getStateValuesDescription(discretized_state) << std::endl;
+    HistoryStep unused_step;
+    unsigned int unused_new_states_counter = 0;
+    if (!first) {
+      action = selectAction(discretized_state, false, unused_step, unused_new_states_counter, masterRng);
+    }
+    std::vector<Action> stateActions; 
+    model->getAllActions(discretized_state, stateActions);
+    ss << "      Default Policy Suggests: " << defaultPolicy->getBestAction(discretized_state, stateActions, masterRng) << std::endl;
+    State next_state;
+    float reward;
+    int depth_count;
+    model->takeAction(start_state, action, reward, next_state, terminal, depth_count, masterRng);
+    total_reward += reward;
+    depth += depth_count;
+    ss << "      Action Selected: " << action << ", Reward: " << reward << std::endl;
+    start_state = next_state;
+    discretized_state = next_state;
+    stateMapping->map(discretized_state);
+    first = false;
+  }
+  std::cout << ss.str();
+  ss << "    Total Reward in best trajectory: " << total_reward << std::endl;
+}
 template<class State, class StateHash, class Action>
 Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &state, 
     bool use_planning_bound, HistoryStep& history_step, unsigned int& new_states_added_in_rollout,
