@@ -4,7 +4,7 @@
 /*
 File: ValueIteration.h
 Author: Piyush Khandelwal
-Description: Value iteration operating on predictive models 
+Description: Value iteration operating on predictive models
 Created:  2013-07-23
 */
 
@@ -15,6 +15,8 @@ Created:  2013-07-23
 
 #include "PredictiveModel.h"
 #include "VIEstimator.h"
+
+#include <bwi_tools/common/Params.h>
 
 #ifdef VI_DEBUG
 #define VI_OUTPUT(x) std::cout << x << std::endl
@@ -95,9 +97,9 @@ void ValueIteration<State,Action>::computePolicy() {
         float action_value = 0;
         std::vector<State> next_states;
         std::vector<float> rewards, probabilities;
-        model_->getTransitionDynamics(state, action, next_states, rewards, 
+        model_->getTransitionDynamics(state, action, next_states, rewards,
             probabilities);
-        for (size_t ns_counter = 0; ns_counter < next_states.size(); 
+        for (size_t ns_counter = 0; ns_counter < next_states.size();
             ++ns_counter) {
           State& ns = next_states[ns_counter];
           float& reward = rewards[ns_counter];
