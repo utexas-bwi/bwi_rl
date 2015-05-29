@@ -36,6 +36,8 @@
  *
  **/
 
+#include<boost/foreach.hpp>
+
 #include <bwi_rl/planning/PredictiveModel.h>
 #include <bwi_rl/planning/ValueIteration.h>
 #include <bwi_rl/planning/VITabularEstimator.h>
@@ -141,12 +143,12 @@ class GridModel : public PredictiveModel<State, Action> {
         // Transition Dynamics are only valid at a non terminal state
         State ns;
         ns.x = state.x;
-        ns.y = (state.y + 1) % GRID_SIZE;
+        ns.y = (state.y == 0) ? GRID_SIZE - 1 : state.y - 1;
         next_states.push_back(ns);
         ns.x = state.x;
-        ns.y = (state.y == 0) ? GRID_SIZE : state.y - 1;
+        ns.y = (state.y + 1) % GRID_SIZE;
         next_states.push_back(ns);
-        ns.x = (state.x == 0) ? GRID_SIZE : state.x - 1;
+        ns.x = (state.x == 0) ? GRID_SIZE - 1 : state.x - 1;
         ns.y = state.y;
         next_states.push_back(ns);
         ns.x = (state.x + 1) % GRID_SIZE;
@@ -190,10 +192,38 @@ int main(int argc, char **argv) {
   std::cout << "Computing policy..." << std::endl;
   vi.computePolicy();
 
+  std::vector<State> test_states;
   State test;
-  test.x = 2;
+  test.x = 5;
   test.y = 2;
-  std::cout << "Best action at state " << test << " is " << vi.getBestAction(test) << std::endl;
+  test_states.push_back(test);
+  test.x = 2;
+  test.y = 5;
+  test_states.push_back(test);
+  test.x = 5;
+  test.y = 8;
+  test_states.push_back(test);
+  test.x = 8;
+  test.y = 5;
+  test_states.push_back(test);
+
+  BOOST_FOREACH(const State& s, test_states) {
+    std::cout << "Best action at state " << s << " is " << vi.getBestAction(s) << std::endl;
+    // std::vector<Action> actions;
+    // model->getActionsAtState(s, actions);
+    // BOOST_FOREACH(const Action& a, actions) {
+    //   std::cout << "  Next state distributions after taking action " << a << std::endl;
+    //   std::vector<State> ns;
+    //   std::vector<float> r;
+    //   std::vector<float> p;
+    //   model->getTransitionDynamics(s, a, ns, r, p);
+    //   int counter = 0;
+    //   BOOST_FOREACH(const State& s2, ns) {
+    //     std::cout << "    One possible next state is " << s2 << " with probability " << p[counter] << " and reward " << r[counter] << std::endl;
+    //     ++counter;
+    //   }
+    // }
+  }
 
   return 0;
 }
