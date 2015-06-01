@@ -36,7 +36,7 @@ class StateActionInfo {
 
 class StateInfo {
   public:
-    StateInfo(unsigned int num_actions = 0, unsigned int initial_visits = 0) : 
+    StateInfo(unsigned int num_actions = 0, unsigned int initial_visits = 0) :
         action_infos(num_actions),
         state_visits(initial_visits) {}
 
@@ -83,10 +83,15 @@ class MultiThreadedMCTS {
         StateMappingPtr stateMapping, boost::shared_ptr<RNG> masterRng, const Params &p);
     virtual ~MultiThreadedMCTS () {}
 
-    unsigned int search(const State &startState, 
-        unsigned int& termination_count,
-        double maxPlanningtime = 1.0,
-        int maxPlayouts = 0);
+    unsigned int search(const State &startState,
+                        unsigned int& termination_count,
+                        double maxPlanningtime = 1.0,
+                        int maxPlayouts = 0);
+    unsigned int search(const State &startState,
+                        const Action &startAction,
+                        unsigned int& termination_count,
+                        double maxPlanningtime = 1.0,
+                        int maxPlayouts = 0);
     void singleThreadedSearch();
     Action selectWorldAction(const State &state);
     void printBestTrajectory(const State &state, Action action);
@@ -96,7 +101,7 @@ class MultiThreadedMCTS {
   private:
 
     float calcActionValue(const StateActionInfo &action_info,
-                          const StateInfo &state_info, 
+                          const StateInfo &state_info,
                           bool use_planning_bound) {
       if (action_info.visits == 0) {
         return (use_planning_bound) ? p.unknownActionPlanningValue : p.unknownActionValue;
@@ -106,7 +111,7 @@ class MultiThreadedMCTS {
     }
 
     float maxValueForState(const State &state, const StateInfo& state_info);
-    Action selectAction(const State &state, bool use_planning_bound, 
+    Action selectAction(const State &state, bool use_planning_bound,
         HistoryStep &step, unsigned int& new_states_added_in_rollout, boost::shared_ptr<RNG>& rng);
 
     std::string getStateValuesDescription(const State& state);
@@ -127,6 +132,9 @@ class MultiThreadedMCTS {
     double maxPlanningTime;
     double endPlanningTime;
 
+    Action startAction;
+    bool startActionAvailable;
+
     Params p;
     boost::shared_ptr<RNG> masterRng;
 
@@ -135,15 +143,25 @@ class MultiThreadedMCTS {
 
 template<class State, class StateHash, class Action>
 MultiThreadedMCTS<State, StateHash, Action>::MultiThreadedMCTS(
-    DefaultPolicyPtr defaultPolicy, 
-    ModelUpdaterPtr modelUpdater, StateMappingPtr stateMapping, 
+    DefaultPolicyPtr defaultPolicy,
+    ModelUpdaterPtr modelUpdater, StateMappingPtr stateMapping,
     boost::shared_ptr<RNG> masterRng, const Params &p) : defaultPolicy(defaultPolicy),
-    modelUpdater(modelUpdater), stateMapping(stateMapping), masterRng(masterRng), p(p) {}
+    modelUpdater(modelUpdater), stateMapping(stateMapping), masterRng(masterRng), startActionAvailable(false), p(p) {}
 
-// TODO also allowing restriction of first action.
 template<class State, class StateHash, class Action>
 unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
-    const State &startState, 
+    const State &startState,
+    const Action &startAction,
+    unsigned int &termination_count,
+    double maxPlanningTime, int maxPlayouts) {
+  this->startAction = startAction;
+  this->startActionAvailable = true;
+  return search(startState, termination_count, maxPlanningTime, maxPlayouts);
+}
+
+template<class State, class StateHash, class Action>
+unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
+    const State &startState,
     unsigned int &termination_count,
     double maxPlanningTime, int maxPlayouts) {
 
@@ -158,13 +176,13 @@ unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
 
   this->model = modelUpdater->selectModel(startState);
   this->startState = startState;
-  this->maxPlayouts = maxPlayouts; 
+  this->maxPlayouts = maxPlayouts;
   this->maxPlanningTime = maxPlanningTime;
   currentPlayouts = 0;
   terminatedPlayouts = 0;
   endPlanningTime = getTime() + maxPlanningTime;
 
-  std::vector<boost::shared_ptr<boost::thread> > threads; 
+  std::vector<boost::shared_ptr<boost::thread> > threads;
   // Launch n - 1 threads;
   for (int n = 1; n < p.numThreads; ++n) {
     boost::shared_ptr<boost::thread> thread(new
@@ -180,6 +198,8 @@ unsigned int MultiThreadedMCTS<State, StateHash, Action>::search(
   for (int n = 1; n < p.numThreads; ++n) {
     threads[n - 1]->join();
   }
+
+  this->startActionAvailable = false;
 
   termination_count = terminatedPlayouts;
   return currentPlayouts;
@@ -200,7 +220,7 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
     history.resize(p.maxDepth);
   }
 
-  while (((maxPlanningTime <= 0.0) || (getTime() < endPlanningTime)) && 
+  while (((maxPlanningTime <= 0.0) || (getTime() < endPlanningTime)) &&
          ((maxPlayouts <= 0) || (currentPlayouts < maxPlayouts))) {
 
     // TODO not locked
@@ -214,8 +234,10 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
     bool terminal = false;
     int depth_count;
 
+    bool atStartState = true;
+
     stateMapping->map(discretizedState); // discretize state
-    
+
     unsigned int history_size = 0;
     unsigned int new_states_added_in_rollout = 0;
 
@@ -225,14 +247,18 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
     if (p.maxDepth <= 0) {
       // Version of the code with no max depth (and hence no pre-cached history memory).
       history.clear();
-      for (unsigned int depth = 0; 
-          (!terminal && (maxPlanningTime <= 0.0 || getTime() < endPlanningTime)); 
+      for (unsigned int depth = 0;
+          (!terminal && (maxPlanningTime <= 0.0 || getTime() < endPlanningTime));
           depth += depth_count) {
 
         // Select action, take it and update the model with the action taken in simulation.
         MCTS_OUTPUT("MCTS State: " << state << " " << "DEPTH: " << depth);
         HistoryStep step;
-        action = selectAction(discretizedState, true, step, new_states_added_in_rollout, rng);
+        if (atStartState && startActionAvailable) {
+          action = startAction;
+        } else {
+          action = selectAction(discretizedState, true, step, new_states_added_in_rollout, rng);
+        }
         model->takeAction(state, action, step.reward, newState, terminal, depth_count, rng);
         MCTS_OUTPUT(" Action Selected: " << action);
         MCTS_OUTPUT("  Reward: " << step.reward);
@@ -248,18 +274,23 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
         state = newState;
         discretizedState = newState;
         stateMapping->map(discretizedState);
+        atStartState = false;
       }
       history_size = history.size();
     } else {
       // Version of the code with max depth (and precached memory for history).
-      for (unsigned int depth = 0; 
-          (!terminal && (depth < p.maxDepth) && (maxPlanningTime <= 0.0 || getTime() < endPlanningTime)); 
+      for (unsigned int depth = 0;
+          (!terminal && (depth < p.maxDepth) && (maxPlanningTime <= 0.0 || getTime() < endPlanningTime));
           depth += depth_count) {
 
         // Select action, take it and update the model with the action taken in simulation.
         MCTS_OUTPUT("MCTS State: " << state << " " << "DEPTH: " << depth);
         HistoryStep &step = history[history_size];
-        action = selectAction(discretizedState, true, step, new_states_added_in_rollout, rng);
+        if (atStartState && startActionAvailable) {
+          action = startAction;
+        } else {
+          action = selectAction(discretizedState, true, step, new_states_added_in_rollout, rng);
+        }
         model->takeAction(state, action, step.reward, newState, terminal, depth_count, rng);
         MCTS_OUTPUT(" Action Selected: " << action);
         MCTS_OUTPUT("  Reward: " << step.reward);
@@ -275,6 +306,7 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
         state = newState;
         discretizedState = newState;
         stateMapping->map(discretizedState);
+        atStartState = false;
       }
 
     }
@@ -290,7 +322,7 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
       // Get bootstrap value of final state
       // Use of typename: http://stackoverflow.com/questions/11275444/c-template-typename-iterator
       typename StateInfoTable::const_iterator final_state_info = stateInfoTable.find(discretizedState);
-      if ((final_state_info == stateInfoTable.end()) || (final_state_info->second.state_visits == 0)) { 
+      if ((final_state_info == stateInfoTable.end()) || (final_state_info->second.state_visits == 0)) {
         backpropValue = p.unknownBootstrapValue;
       } else {
         backpropValue = maxValueForState(state, final_state_info->second);
@@ -322,7 +354,7 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
           action_info.val += (1.0 / action_info.visits) * (backpropValue - action_info.val);
           MCTS_OUTPUT("  Set value of action " << action_id << " to " << action_info.val);
         }
-        
+
         if (state_info->second.state_visits > 1) {
           float maxValue = maxValueForState(state_info->first, state_info->second);
           MCTS_OUTPUT("  Interpolating backpropagation value between current " << backpropValue << " and max " << maxValue);
@@ -377,7 +409,7 @@ void MultiThreadedMCTS<State, StateHash, Action>::printBestTrajectory(const Stat
     if (!first) {
       action = selectAction(discretized_state, false, unused_step, unused_new_states_counter, masterRng);
     }
-    std::vector<Action> stateActions; 
+    std::vector<Action> stateActions;
     model->getAllActions(discretized_state, stateActions);
     ss << "      Default Policy Suggests: " << defaultPolicy->getBestAction(discretized_state, stateActions, masterRng) << std::endl;
     State next_state;
@@ -396,7 +428,7 @@ void MultiThreadedMCTS<State, StateHash, Action>::printBestTrajectory(const Stat
   ss << "    Total Reward in best trajectory: " << total_reward << std::endl;
 }
 template<class State, class StateHash, class Action>
-Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &state, 
+Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &state,
     bool use_planning_bound, HistoryStep& history_step, unsigned int& new_states_added_in_rollout,
     boost::shared_ptr<RNG>& rng) {
 
@@ -413,7 +445,7 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &st
   if (history_step.state_info != stateInfoTable.end()) {
     // It may be possible that we hit this state for the first time in this rollout itself.
     // Use the default policy if state visits are zero (i.e. we have not back-propogated yet).
-    if (history_step.state_info->second.state_visits != 0) { 
+    if (history_step.state_info->second.state_visits != 0) {
       float maxVal = -std::numeric_limits<float>::max();
       std::vector<unsigned int> maxActionIdx;
       unsigned int currentActionIdx = 0;
@@ -435,9 +467,9 @@ Action MultiThreadedMCTS<State, StateHash, Action>::selectAction(const State &st
     history_step.update_this_state = true;
   } else if ((new_states_added_in_rollout < p.maxNewStatesPerRollout) || (p.maxNewStatesPerRollout == 0)) {
     // Add the state + state-action, and choose an action using the default policy.
-    StateInfo new_state_info(stateActions.size(), 0); 
+    StateInfo new_state_info(stateActions.size(), 0);
     bool unused_bool;
-    boost::tie(history_step.state_info, unused_bool) = 
+    boost::tie(history_step.state_info, unused_bool) =
       stateInfoTable.insert(std::pair<State, StateInfo>(state, new_state_info));
     history_step.action_id = defaultPolicy->getBestAction(state, stateActions, rng);
     history_step.update_this_state = true;
@@ -512,7 +544,7 @@ std::string MultiThreadedMCTS<State, StateHash, Action>::getStateTableDescriptio
   int count = 0;
   for (typename StateInfoTable::const_iterator v = stateInfoTable.begin();
       v != stateInfoTable.end(); ++v) {
-    ss << "State #" << count << ": " << getStateValuesDescription(v->first) << std::endl; 
+    ss << "State #" << count << ": " << getStateValuesDescription(v->first) << std::endl;
     ++count;
   }
   return ss.str();
