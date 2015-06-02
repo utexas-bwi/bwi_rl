@@ -254,10 +254,9 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
         // Select action, take it and update the model with the action taken in simulation.
         MCTS_OUTPUT("MCTS State: " << state << " " << "DEPTH: " << depth);
         HistoryStep step;
+        action = selectAction(discretizedState, true, step, new_states_added_in_rollout, rng);
         if (atStartState && startActionAvailable) {
           action = startAction;
-        } else {
-          action = selectAction(discretizedState, true, step, new_states_added_in_rollout, rng);
         }
         model->takeAction(state, action, step.reward, newState, terminal, depth_count, rng);
         MCTS_OUTPUT(" Action Selected: " << action);
@@ -286,10 +285,9 @@ void MultiThreadedMCTS<State, StateHash, Action>::singleThreadedSearch() {
         // Select action, take it and update the model with the action taken in simulation.
         MCTS_OUTPUT("MCTS State: " << state << " " << "DEPTH: " << depth);
         HistoryStep &step = history[history_size];
+        action = selectAction(discretizedState, true, step, new_states_added_in_rollout, rng);
         if (atStartState && startActionAvailable) {
           action = startAction;
-        } else {
-          action = selectAction(discretizedState, true, step, new_states_added_in_rollout, rng);
         }
         model->takeAction(state, action, step.reward, newState, terminal, depth_count, rng);
         MCTS_OUTPUT(" Action Selected: " << action);
