@@ -83,6 +83,8 @@ bool operator<(const State& l, const State& r) {
 
   if (l.y < r.y) return true;
   if (l.y > r.y) return false;
+
+  return false;
 }
 
 bool operator==(const State& l, const State& r) {
